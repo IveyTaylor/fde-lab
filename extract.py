@@ -1,10 +1,13 @@
 import json
+import sys
 import os
 from dotenv import load_dotenv
 from anthropic import Anthropic
 
 load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+PREFILL = '{"company":'
 
 MODEL = "claude-haiku-4-5-20251001"
 
@@ -41,6 +44,7 @@ messages = [
         {"role": "assistant", "content": "{"},
 ]
 
+print("Ivey, this is messages")
 print(messages)
 
 # TODO 1: build the messages list and make the call
@@ -52,17 +56,24 @@ response = client.messages.create(
     max_tokens=1000,
     system=SYSTEM,
     messages=[
-        {"role": "user", "content": EMAIL}
+        {"role": "user", "content": EMAIL},
+        {"role": "assistant", "content": PREFILL},
     ]
 )
 
 # TODO 2: pull the text out. Same as chat.py
-raw = "{" + response.content[0].text     # prepend happens HERE, once
-# raw = response.content[0].text
+raw = PREFILL + response.content[0].text     # prepend happens HERE, once
+# raw = response.content[0].text"
+
+print("Ivey this is repr(raw)")
+print(repr(raw))
 
 # TODO 4 try to parse it. Expect this to blow up.
-# data = json.loads(raw)
-# print(data)
+data = json.loads(raw)
+print(data)
+
+with open("output.json", "w") as f:
+    json.dump(data, f, indent=2)
 
 # TODO 3: look at it before you touch it
 #   The rer() is deliberate -- it shows you newlines and quotes literally
