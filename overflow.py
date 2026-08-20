@@ -43,9 +43,13 @@ with open("notes/varied-run.md", "w", encoding="utf-8") as run_log:
         print(f"turn {i+1} | in tokens {response.usage.input_tokens} | out tokens {response.usage.output_tokens} | stop reasonn {response.stop_reason}")
         print(f"This is message {len(messages)} because thats what len(messages) is telling me right now")
         print(f"\n>>> SENT: {QUESTIONS[i % len(QUESTIONS)][:150]}")
-        print(f"<<< GOT: {reply_text[:300]}")
+        # print(f"<<< GOT: {reply_text[:300]}")
 
         run_log.write(f"\n## Turn {i+1}\n")
         run_log.write(f"in: {response.usage.input_tokens} | out: {response.usage.output_tokens} | {response.stop_reason}\n\n")
         run_log.write(f"**Sent:** {QUESTIONS[i % len(QUESTIONS)][:200]}\n\n")
         run_log.write(f"**Got:** {reply_text}\n")
+
+        print(f"--- SENDING {len(messages)} messages ---")
+        for m in messages:
+            print(f"  [{m['role']}] {m['content'][:80]}")
