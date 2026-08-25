@@ -1,5 +1,4 @@
 import json
-import sys
 import os
 from dotenv import load_dotenv
 from anthropic import Anthropic
@@ -35,56 +34,90 @@ Keys:
 Use null for anything not stated. Never use "not provided", "Unknown", or any otehr placeholder string.  
 """
 
-# TODO 5: add the prefill turn
-#   the model continues from wahtever the last assistant turn contains.
-#   Start it mid-object and it cannot emit a preamble.
+# Only allow specific services
+ALLOWED_SERVICES = ["shredding", "scanning", "hard drive destruction"]
+
+def validate(record):
+    problems = []
+
+    expected = ["company","contact_name","service_type","box_count","volume_stated_as","urgency"]
+
+    for key in expected:
+        if key not in record:
+            problems.append(f"missing key:  {key}")
+
+    box = record.get("box_count")
+    if box is not None and not isinstance(box, int):
+        problems.append(f"box_count must be an integer or null. Its {type(box).__name__}: {box!r}")
+
+    service_type = record.get("service_type")
+    if service_type is not None and service_type.lower() not in ALLOWED_SERVICES:
+        problems.append(
+            f"service_type was {service_type!r}, which is not a service this business "
+            f"offers. Choose exactly one of: {ALLOWED_SERVICES}, or null."
+        )
+
+
+    PLACEHOLDERS = ["not provided", "unknown", "n/a", "not specified"]
+
+    for key, value in record.items():
+        # print(key)
+        # print(value)
+        if isinstance(value, str) and value.lower() in PLACEHOLDERS:
+            problems.append(f"placeholder in {key} of {value!r}")
+
+    return problems
+
+# Okay here is the next section
+MAX_ATTEMPTS = 3
 
 messages = [
-        {"role": "user", "content": EMAIL},
-        {"role": "assistant", "content": "{"},
+    {"role": "user", "content": EMAIL},
 ]
 
-print("Ivey, this is messages")
-print(messages)
+for attempt in range(1, MAX_ATTEMPTS + 1):
+    print(f"\n--- attempt {attempt} ---")
 
-# TODO 1: build the messages list and make the call
-#   Same shape as chat.py, but one user turn instead of a growing history
-#   The content shold be the EMAIL
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=1000,
+        system=SYSTEM,
+        messages=messages + [{"role": "assistant", "content": PREFILL}],
+    )
 
-response = client.messages.create(
-    model=MODEL,
-    max_tokens=1000,
-    system=SYSTEM,
-    messages=[
-        {"role": "user", "content": EMAIL},
-        {"role": "assistant", "content": PREFILL},
-    ]
-)
+    raw = PREFILL + response.content[0].text
+    print(repr(raw))
+    print("that was raw")
 
-# TODO 2: pull the text out. Same as chat.py
-raw = PREFILL + response.content[0].text     # prepend happens HERE, once
-# raw = response.content[0].text"
+    try:
+        data = json.loads(raw)
+        problems = validate(data)
+    except json.JSONDecodeError as e:
+        data = None
+        problems = [f"response was not valid JSON {e}"]
 
-print("Ivey this is repr(raw)")
-print(repr(raw))
+    if not problems:
+        print("VALIDATION PASSED")
+        break
 
-# TODO 4 try to parse it. Expect this to blow up.
-data = json.loads(raw)
-print(data)
+    print("VALIDATION FAILED:")
+    for p in problems:
+        print(f"  - {p}")
 
-with open("output.json", "w") as f:
-    json.dump(data, f, indent=2)
+    feedback = "The JSON had these problems:\n"+"\n".join(f"- {p}" for p in problems)
+    feedback += "\n\nReturn the corrected JSON object only."
+    messages.append({"role": "assistant", "content": raw})
+    messages.append({"role": "user", "content": feedback})
+    outgoing = messages + [{"role": "assistant", "content": PREFILL}]
+    # print(messages)
+    print(json.dumps(outgoing, indent=2))
+    print("that was messages")
+    
+else:
+    print(f"gave up after {MAX_ATTEMPTS} attempts")
 
-# TODO 3: look at it before you touch it
-#   The rer() is deliberate -- it shows you newlines and quotes literally
-#   Which is exactly wehre parse failures hide
-print("--- RAW ---")
-print(repr(raw))
-print("--- END RAW ---")
-# print(raw)
-
-# TODO 6: Put the brace back
-#   response.content[0].text will NOT include teh "{" you prefilled
-#   the model only returns what IT generated. Prepend BEFORE parsing
-
-# raw = "{" + response.content[0].text
+if data is not None and not problems:
+    print("VALIDATION SUCCESS! AYBABTU!")
+    print(data)
+else:
+    print("no usable record after retries")
