@@ -6,3 +6,5 @@ __pycache__/
 .DS_Store
 output.json
 shane.db
+inspect_response.pyc
+career/

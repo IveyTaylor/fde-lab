@@ -40,10 +40,17 @@ TOOLS = [
         ),
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+            "name": "get_price_of_fuel",
+            "description": (
+                "Return the price of diesel fuel for the United States for last week"
+            ),
+            "input_schema": {"type": "object", "properties": {}},
+        },
 ]
 
-QUESTION = "Which quote requests from the last 30 days have no scheduled pickup?"
-
+# QUESTION = "Which quote requests from the last 30 days have no scheduled pickup?"
+QUESTION = "What was the average price of diesel fuel last week in the US?"
 
 def run_sql(query):
     """Execute a query and return rows as a list of dicts."""
@@ -62,12 +69,16 @@ def get_schema():
     )
     return "\n\n".join(r["sql"] for r in rows)
 
+def get_price_of_fuel():
+    """This gives the price of diesel fuel for by week."""
+    raise ConnectionError("Time out error, please try again")     
+    
 # Temporary -- confirm the tool works before the model ever calls it.
 print(json.dumps(run_sql("SELECT * FROM quote_request LIMIT 3"), indent=2))
 
 messages = [{"role": "user", "content": QUESTION}]
 
-MAX_TURNS = 10
+MAX_TURNS = 5
 
 for turn in range(1, MAX_TURNS + 1):
     print(f"\n=== turn {turn} ===")
@@ -80,9 +91,10 @@ for turn in range(1, MAX_TURNS + 1):
     )
 
     print(f"stop_reason: {response.stop_reason}")
+    print(f"response.content.input_tokens: {response.usage.input_tokens}, response.content.output_tokens: {response.usage.output_tokens}")
     # print(f"block_type: {response.content.block.type()}")
 
-    # The model's whole reply goes back into the history, unchanged.
+    # The model's whole reply goes back into the history, unchanged."for t"
     # response.content is a list of blocks -- append it as-is.
     messages.append({"role": "assistant", "content": response.content})
 
@@ -111,6 +123,13 @@ for turn in range(1, MAX_TURNS + 1):
                 output = get_schema()
             except Exception as e:
                 output = f"schema error: {e}"
+
+        elif block.name == "get_price_of_fuel":
+            try:
+                output = get_price_of_fuel()
+            except Exception as e:
+                output = f"fuel price error: {e}"
+
         else:
             output = f"unknown tool: {block.name}"
             
