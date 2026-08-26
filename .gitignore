@@ -8,3 +8,5 @@ output.json
 shane.db
 inspect_response.pyc
 career/
+workspace/*
+!workspace/.gitkeep
