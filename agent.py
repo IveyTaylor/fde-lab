@@ -3,13 +3,13 @@ import os
 import sqlite3
 from dotenv import load_dotenv
 from anthropic import Anthropic
+from pathlib import Path
 
 load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
 MODEL = "claude-haiku-4-5-20251001"
-
 DB = "shane.db"
+WORKSPACE = Path("workspace").resolve()
 
 TOOLS = [
     {
@@ -47,10 +47,79 @@ TOOLS = [
             ),
             "input_schema": {"type": "object", "properties": {}},
         },
+    {
+        "name": "read_file",
+        "description": (
+            "Read a text file from the agent's workspace directory and return "
+            "its contents, up to the first 5000 characters. Files outside the "
+            "workspace cannot be accessed."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_name": {
+                    "type": "string",
+                    "description": (
+                        "Name of the file to read, relative to the workspace "
+                        "directory. Must not contain path separators or '..'."
+                    ),
+                }
+            },
+            "required": ["file_name"],
+        },
+    },
+     {
+        "name": "write_file",
+        "description": (
+            "Write text to a file in the agent's workspace directory. "
+            "If the file already exists it is overwritten without warning."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_name": {
+                    "type": "string",
+                    "description": (
+                        "Name of the file to write, relative to the workspace "
+                        "directory. Must not contain path separators or '..'."
+                    ),
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The full text to write to the file.",
+                },
+            },
+            "required": ["file_name", "content"],
+        },
+    },
 ]
 
-# QUESTION = "Which quote requests from the last 30 days have no scheduled pickup?"
 QUESTION = "What was the average price of diesel fuel last week in the US?"
+QUESTION = "Which quote requests from March 2022 to April 2022 have no scheduled pickup?"
+QUESTION = "Write a two sentence thank you email to a customer who has had work done over the last 30 days and put it in a file. "
+
+def write_file(file_name, content):
+    target = (WORKSPACE / file_name).resolve()
+    if not target.is_relative_to(WORKSPACE):
+        raise PermissionError(
+            f"file access is limited to the workspace directory: {file_name}"
+        )
+    target = target.with_suffix(".txt")
+    target.write_text(content)
+    return f"Wrote {len(content)} characters to a file called {file_name}"        
+
+def read_file(file_name):
+    target = (WORKSPACE / file_name).resolve()
+    if not target.is_relative_to(WORKSPACE):
+        raise PermissionError(
+            f"file access is limited to the workspace directory: {file_name}"
+        )
+
+    size = target.stat().st_size
+    text = target.read_text()[:5000]
+    if size > 5000:
+        text += f"\n\n[Truncated. File is {size} bytes; showing the first 5000 characters.]"
+    return text
 
 def run_sql(query):
     """Execute a query and return rows as a list of dicts."""
@@ -72,10 +141,34 @@ def get_schema():
 def get_price_of_fuel():
     """This gives the price of diesel fuel for by week."""
     raise ConnectionError("Time out error, please try again")     
-    
-# Temporary -- confirm the tool works before the model ever calls it.
-print(json.dumps(run_sql("SELECT * FROM quote_request LIMIT 3"), indent=2))
 
+def dispatch(name, tool_input):
+    try:
+        if name == "run_sql":
+            return json.dumps(run_sql(tool_input["query"])), False
+
+        elif name == "get_schema":
+            return get_schema(), False
+
+        elif name == "get_price_of_fuel":
+            return get_price_of_fuel(), False
+
+        elif name == "read_file":
+            return read_file(tool_input["file_name"]), False
+        
+        elif name == "write_file":
+            result = write_file(
+                file_name=tool_input["file_name"], 
+                content=tool_input["content"])
+            return result, False
+
+        else:
+            return f"unknown tool: {name}", True
+
+    except Exception as e:
+        return f"{name} failed: {e}", True
+
+print(dispatch("write_file", {"file_name": "../stolen", "content": "escaped"}))
 messages = [{"role": "user", "content": QUESTION}]
 
 MAX_TURNS = 5
@@ -111,32 +204,14 @@ for turn in range(1, MAX_TURNS + 1):
             continue
 
         print(f"CALL {block.name}: {block.input}")
-    
-        if block.name == "run_sql":
-            try:
-                output = json.dumps(run_sql(block.input["query"]))
-            except Exception as e:
-                output = f"SQL error: {e}"
 
-        elif block.name == "get_schema":
-            try:
-                output = get_schema()
-            except Exception as e:
-                output = f"schema error: {e}"
-
-        elif block.name == "get_price_of_fuel":
-            try:
-                output = get_price_of_fuel()
-            except Exception as e:
-                output = f"fuel price error: {e}"
-
-        else:
-            output = f"unknown tool: {block.name}"
-            
+        output, is_error = dispatch(block.name, block.input)
+                    
         results.append({
             "type": "tool_result",
             "tool_use_id": block.id,
             "content": output,
+            "is_error": is_error,
         })
 
     # TODO B: send the results back.
@@ -145,3 +220,4 @@ for turn in range(1, MAX_TURNS + 1):
 
 else:
     print(f"hit the {MAX_TURNS}-turn cap without finishing")
+    
