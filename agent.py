@@ -4,6 +4,7 @@ import sqlite3
 from dotenv import load_dotenv
 from anthropic import Anthropic
 from pathlib import Path
+from datetime import datetime
 
 load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -94,9 +95,11 @@ TOOLS = [
     },
 ]
 
+# I can do this because each question overwrites the previous value
 QUESTION = "What was the average price of diesel fuel last week in the US?"
 QUESTION = "Which quote requests from March 2022 to April 2022 have no scheduled pickup?"
 QUESTION = "Write a two sentence thank you email to a customer who has had work done over the last 30 days and put it in a file. "
+QUESTION = "List every customer who has had a completed pickup in the last 30 days, with the pickup dates."
 
 def write_file(file_name, content):
     target = (WORKSPACE / file_name).resolve()
@@ -168,19 +171,47 @@ def dispatch(name, tool_input):
     except Exception as e:
         return f"{name} failed: {e}", True
 
-print(dispatch("write_file", {"file_name": "../stolen", "content": "escaped"}))
+def dump_messages(messages, path="messages_dump.json"):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    def clean(m):
+        content = m["content"]
+        if isinstance(content, list):
+            content = [
+                b.model_dump() if hasattr(b, "model_dump") else b
+                for b in content
+            ]
+        return {"role": m["role"], "content": content}
+
+    Path(path).write_text(
+        json.dumps([clean(m) for m in messages], indent=2, default=str)
+    )
+
+def build_window(messages):
+    window = messages[0:1] + messages[-2:]
+    return window
+
+# This is a cool print I wanted to keep, as it helped me understand stuff
+# as seen in OneNote Temp Notes Python
+# print(dispatch("write_file", {"file_name": "../stolen", "content": "escaped"}))
 messages = [{"role": "user", "content": QUESTION}]
 
 MAX_TURNS = 5
 
 for turn in range(1, MAX_TURNS + 1):
     print(f"\n=== turn {turn} ===")
+    window = build_window(messages)
+
+    print(f"\n count of tokens: {client.messages.count_tokens(
+        model=MODEL,
+        messages=window,
+        tools=TOOLS,
+          )}")
 
     response = client.messages.create(
         model=MODEL,
         max_tokens=2000,
         tools=TOOLS,
-        messages=messages,
+        messages=window,
     )
 
     print(f"stop_reason: {response.stop_reason}")
@@ -196,6 +227,7 @@ for turn in range(1, MAX_TURNS + 1):
         for block in response.content:
             if block.type == "text":
                 print(block.text)
+        dump_messages(messages, f"dumps/{datetime.now():%H%M%S}_finished.json")
         break
 
     results = []
@@ -220,4 +252,4 @@ for turn in range(1, MAX_TURNS + 1):
 
 else:
     print(f"hit the {MAX_TURNS}-turn cap without finishing")
-    
+    dump_messages(messages, f"dumps/{datetime.now():%H%M%S}_capped.json")

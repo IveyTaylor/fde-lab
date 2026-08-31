@@ -10,3 +10,4 @@ inspect_response.pyc
 career/
 workspace/*
 !workspace/.gitkeep
+dumps/
