@@ -11,6 +11,12 @@ client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 MODEL = "claude-haiku-4-5-20251001"
 DB = "shane.db"
 WORKSPACE = Path("workspace").resolve()
+SYSTEM = (
+"You are a quoting assistant for a records-destruction business. "
+"You have read-only database access, a fuel price lookup, and a workspace "
+"for reading and writing files. Answer from data you retrieve, not from "
+"assumption — if you don't know a schema, call get_schema before querying."
+)    
 
 TOOLS = [
     {
@@ -212,7 +218,7 @@ for turn in range(1, MAX_TURNS + 1):
         max_tokens=2000,
         tools=TOOLS,
         messages=window,
-    )
+        )
 
     print(f"stop_reason: {response.stop_reason}")
     print(f"response.content.input_tokens: {response.usage.input_tokens}, response.content.output_tokens: {response.usage.output_tokens}")
