@@ -11,3 +11,4 @@ career/
 workspace/*
 !workspace/.gitkeep
 dumps/
+notes/phase0_old.md
