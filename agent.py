@@ -17,6 +17,10 @@ SYSTEM = (
 "for reading and writing files. Answer from data you retrieve, not from "
 "assumption — if you don't know a schema, call get_schema before querying."
 )    
+PLANT  = "Rule for all quotes: hard drive destruction always includes a Certificate of Destruction line."
+PLANT_IN_SYSTEM = True   # Run A. False → plant goes in messages[1]. Run B.
+
+USE_SYSTEM = 0
 
 TOOLS = [
     {
@@ -103,9 +107,10 @@ TOOLS = [
 
 # I can do this because each question overwrites the previous value
 QUESTION = "What was the average price of diesel fuel last week in the US?"
-QUESTION = "Which quote requests from March 2022 to April 2022 have no scheduled pickup?"
 QUESTION = "Write a two sentence thank you email to a customer who has had work done over the last 30 days and put it in a file. "
 QUESTION = "List every customer who has had a completed pickup in the last 30 days, with the pickup dates."
+QUESTION = "Which quote requests from March 2022 to April 2022 have no scheduled pickup?"
+QUESTION = "How many quote requests came in last month?, Which customers have never had a pickup?, What's the average box count by service type?"
 
 def write_file(file_name, content):
     target = (WORKSPACE / file_name).resolve()
@@ -192,70 +197,120 @@ def dump_messages(messages, path="messages_dump.json"):
         json.dumps([clean(m) for m in messages], indent=2, default=str)
     )
 
-def build_window(messages):
-    window = messages[0:1] + messages[-2:]
-    return window
+def build_window(messages, keep=30):
+    if len(messages) <= keep + 1:
+        print(f"{len(messages)} messages of the {keep} messages we are keeping")
+        return messages
+    print(f"{len(messages)} messages")
+    return messages[-keep:]
 
 # This is a cool print I wanted to keep, as it helped me understand stuff
 # as seen in OneNote Temp Notes Python
 # print(dispatch("write_file", {"file_name": "../stolen", "content": "escaped"}))
-messages = [{"role": "user", "content": QUESTION}]
 
+# ─────────────────────────── amnesia run ───────────────────────────
 MAX_TURNS = 5
+MARKER = "Certificate of Destruction"
 
-for turn in range(1, MAX_TURNS + 1):
-    print(f"\n=== turn {turn} ===")
-    window = build_window(messages)
+PLANT = ("Rule for all quotes: hard drive destruction always includes a "
+         f"{MARKER} line in the quote email.")
+PROBE = "Draft the quote email for a hard drive destruction job."
 
-    print(f"\n count of tokens: {client.messages.count_tokens(
-        model=MODEL,
-        messages=window,
-        tools=TOOLS,
-          )}")
+tasks = [
+    "How many quote requests came in last month?",
+    "Which customers have never had a pickup?",
+    "What's the average box count by service type?",
+    "How many boxes were from places called Union something?",
+    "What's the price of diesel in California?",
+    "How many boxes have we picked up total?",
+    "What's our client count by zip code?",
+    "Do we have clients in multiple states?",
+    "What's the maximum box count by service type?",
+    "What's the biggest order we ever did?",
+    "What's our best customer?",
+    "What's our newest customer?",
+    "What's our oldest customer?",
+    "What's the weather like in Charlotte right now?",
+    "Which customer has the most pickups with null dates?",
+]
 
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=2000,
-        tools=TOOLS,
-        messages=window,
-        )
+messages = [{"role": "user", "content": PLANT}]
+plant_msg = messages[0]          # identity handle — see note 3
 
-    print(f"stop_reason: {response.stop_reason}")
-    print(f"response.content.input_tokens: {response.usage.input_tokens}, response.content.output_tokens: {response.usage.output_tokens}")
-    # print(f"block_type: {response.content.block.type()}")
 
-    # The model's whole reply goes back into the history, unchanged."for t"
-    # response.content is a list of blocks -- append it as-is.
-    messages.append({"role": "assistant", "content": response.content})
+def as_text(content):
+    """Flatten a message's content to a string for substring searching."""
+    if isinstance(content, str):
+        return content
+    return " ".join(
+        str(b if isinstance(b, dict) else b.model_dump()) for b in content
+    )
 
-    if response.stop_reason != "tool_use":
-        # No tool wanted. It's answering. Print the text and stop.
-        for block in response.content:
-            if block.type == "text":
-                print(block.text)
-        dump_messages(messages, f"dumps/{datetime.now():%H%M%S}_finished.json")
-        break
 
-    results = []
-    for block in response.content:
-        if block.type != "tool_use":
+def send(task):
+    """Run one task to completion. Returns (final_text, window, input_tokens)."""
+    messages.append({"role": "user", "content": task})
+    final, window, in_tokens = "", [], 0
+
+    for _ in range(MAX_TURNS):
+        window = build_window(messages)
+        params = {
+            "model": MODEL,
+            "system": SYSTEM if USE_SYSTEM else "",
+            "tools": TOOLS,
+            "messages": window,
+        }
+        response = client.messages.create(max_tokens=2000, **params)
+        in_tokens = response.usage.input_tokens
+        messages.append({"role": "assistant", "content": response.content})
+
+        if response.stop_reason == "tool_use":
+            results = []
+            for block in response.content:
+                if block.type != "tool_use":
+                    continue
+                out = dispatch(block.name, block.input)        # ← SEAM 1
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": str(out),
+                })
+            messages.append({"role": "user", "content": results})
             continue
 
-        print(f"CALL {block.name}: {block.input}")
+        final = " ".join(b.text for b in response.content if b.type == "text")
+        break
 
-        output, is_error = dispatch(block.name, block.input)
-                    
-        results.append({
-            "type": "tool_result",
-            "tool_use_id": block.id,
-            "content": output,
-            "is_error": is_error,
-        })
+    return final, window, in_tokens
 
-    # TODO B: send the results back.
-    #   All tool results go in ONE user turn, as a list:
-    messages.append({"role": "user", "content": results})
 
-else:
-    print(f"hit the {MAX_TURNS}-turn cap without finishing")
-    dump_messages(messages, f"dumps/{datetime.now():%H%M%S}_capped.json")
+records = []
+
+for i, task in enumerate(tasks):
+    send(task)
+
+    if i % 8 == 0:
+        text, window, in_tokens = send(PROBE)
+        idxs = [j for j, m in enumerate(messages) if any(m is w for w in window)]
+        record = {
+            "task_index":     i,
+            "passed":         MARKER in text,
+            "input_tokens":   in_tokens,
+            "messages_len":   len(messages),
+            "window_len":     len(window),
+            "window_floor":   min(idxs) if idxs else None,
+            "plant_in_window": any(m is plant_msg for m in window),
+            "echo_in_window":  MARKER in " ".join(as_text(m["content"]) for m in window),
+        }
+        records.append(record)
+        print(record)
+
+print("\n=== summary ===")
+for r in records:
+    print(f"task {r['task_index']:>2}  pass={str(r['passed']):<5} "
+          f"plant={str(r['plant_in_window']):<5} echo={str(r['echo_in_window']):<5} "
+          f"floor={r['window_floor']}  tokens={r['input_tokens']}")
+
+import json
+with open("amnesia_run.json", "w") as f:
+    json.dump(records, f, indent=2)

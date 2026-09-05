@@ -1,0 +1,22 @@
+[
+  {
+    "task_index": 0,
+    "passed": false,
+    "input_tokens": 1660,
+    "messages_len": 9,
+    "window_len": 9,
+    "window_floor": 0,
+    "plant_in_window": true,
+    "echo_in_window": true
+  },
+  {
+    "task_index": 8,
+    "passed": false,
+    "input_tokens": 2749,
+    "messages_len": 43,
+    "window_len": 30,
+    "window_floor": 12,
+    "plant_in_window": false,
+    "echo_in_window": false
+  }
+]
