@@ -17,8 +17,6 @@ SYSTEM = (
 "for reading and writing files. Answer from data you retrieve, not from "
 "assumption — if you don't know a schema, call get_schema before querying."
 )    
-PLANT  = "Rule for all quotes: hard drive destruction always includes a Certificate of Destruction line."
-PLANT_IN_SYSTEM = True   # Run A. False → plant goes in messages[1]. Run B.
 
 USE_SYSTEM = 0
 
@@ -269,11 +267,12 @@ def send(task):
             for block in response.content:
                 if block.type != "tool_use":
                     continue
-                out = dispatch(block.name, block.input)        # ← SEAM 1
+                out, is_error = dispatch(block.name, block.input)        # ← SEAM 1
                 results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": str(out),
+                    "content": out,
+                    "is_error": is_error,
                 })
             messages.append({"role": "user", "content": results})
             continue
@@ -286,31 +285,36 @@ def send(task):
 
 records = []
 
-for i, task in enumerate(tasks):
-    send(task)
+try:
+    for i, task in enumerate(tasks):
+        send(task)
 
-    if i % 8 == 0:
-        text, window, in_tokens = send(PROBE)
-        idxs = [j for j, m in enumerate(messages) if any(m is w for w in window)]
-        record = {
-            "task_index":     i,
-            "passed":         MARKER in text,
-            "input_tokens":   in_tokens,
-            "messages_len":   len(messages),
-            "window_len":     len(window),
-            "window_floor":   min(idxs) if idxs else None,
-            "plant_in_window": any(m is plant_msg for m in window),
-            "echo_in_window":  MARKER in " ".join(as_text(m["content"]) for m in window),
-        }
-        records.append(record)
-        print(record)
+        if i % 8 == 0:
+            text, window, in_tokens = send(PROBE)
+            idxs = [j for j, m in enumerate(messages) if any(m is w for w in window)]
+            record = {
+                "task_index":     i,
+                "passed":         MARKER in text,
+                "input_tokens":   in_tokens,
+                "messages_len":   len(messages),
+                "window_len":     len(window),
+                "window_floor":   min(idxs) if idxs else None,
+                "plant_in_window": any(m is plant_msg for m in window),
+                "echo_in_window":  MARKER in " ".join(as_text(m["content"]) for m in window),
+            }
+            records.append(record)
+            print(record)
 
-print("\n=== summary ===")
-for r in records:
-    print(f"task {r['task_index']:>2}  pass={str(r['passed']):<5} "
-          f"plant={str(r['plant_in_window']):<5} echo={str(r['echo_in_window']):<5} "
-          f"floor={r['window_floor']}  tokens={r['input_tokens']}")
+    print("\n=== summary ===")
+    for r in records:
+        print(f"task {r['task_index']:>2}  pass={str(r['passed']):<5} "
+            f"plant={str(r['plant_in_window']):<5} echo={str(r['echo_in_window']):<5} "
+            f"floor={r['window_floor']}  tokens={r['input_tokens']}")
+except Exception as e:
+    print(f"RUN FAILED at task {i}: {e}")
+finally:
+    with open("amnesia_run.json", "w") as f:
+        json.dump(records, f, indent=2)
 
-import json
-with open("amnesia_run.json", "w") as f:
-    json.dump(records, f, indent=2)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dump_messages(messages, f"dumps/{ts}_amnesia.json")
