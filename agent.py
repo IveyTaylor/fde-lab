@@ -20,9 +20,47 @@ SYSTEM = (
 "assumption — if you don't know a schema, call get_schema before querying."
 )    
 
-USE_SYSTEM = 0
+USE_SYSTEM = 1
+
+def load_policies(db_path):
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT policy_text FROM policy")
+    rows = [r[0] for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+policy_rows = load_policies(DB)
+if policy_rows:
+    SYSTEM = SYSTEM + "\n\nCompany policies:\n" + "\n".join(f"- {p}" for p in policy_rows)
+
+print(f"SYSTEM PROMPT: {SYSTEM}")
 
 TOOLS = [
+    {
+        "name": "remember",
+        "description": (
+            "Save a fact about a customer for future sessions. "
+            "Only call this when the user EXPLICITLY asks you to remember "
+            "something — phrases like 'remember that...' or 'make a note that...'. "
+            "Do not call this on your own judgment just because something in the "
+            "conversation seems worth keeping."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "customer_name": {
+                    "type": "string",
+                    "description": "The customer this fact is about.",
+                },
+                "fact_text": {
+                    "type": "string",
+                    "description": "The fact to remember, in plain text.",
+                },
+            },
+            "required": ["customer_name", "fact_text"],
+        },
+    },
     {
         "name": "run_sql",
         "description": (
@@ -127,6 +165,21 @@ QUESTION = "List every customer who has had a completed pickup in the last 30 da
 QUESTION = "Which quote requests from March 2022 to April 2022 have no scheduled pickup?"
 QUESTION = "How many quote requests came in last month?, Which customers have never had a pickup?, What's the average box count by service type?"
 
+def remember(customer_name, fact_text):
+    """Execute a query to load the important thing to remember."""
+    conn = sqlite3.connect(DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO memory (customer_name, fact_text, memory_datetime) VALUES (?, ?, ?)",
+            (customer_name, fact_text, datetime.now().isoformat())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    
 def city_lat_long(city_name):
     """Resolve a city name to (lat, lon) using Open-Meteo's geocoding API."""
     resp = requests.get(
@@ -213,8 +266,11 @@ def dispatch(name, tool_input):
         if name == "get_weather":
             return json.dumps(get_weather(tool_input["city_name"])), False
 
-        if name == "run_sql":
+        elif name == "run_sql":
             return json.dumps(run_sql(tool_input["query"])), False
+
+        elif name == "remember":
+            return remember(tool_input["customer_name"], tool_input["fact_text"]), False
 
         elif name == "get_schema":
             return get_schema(), False
@@ -306,6 +362,8 @@ PROBE = "Draft the quote email for a hard drive destruction job."
 tasks = [
     "How many quote requests came in last month?",
     "Which customers have never had a pickup?",
+    "Piedmont Family dentistry needs a week lead time. When can we pick up for them next?"
+    "Can you remember that Catawba Valley Orthopedics always needs 2 weeks lead time for a pickup?"
     "What's the average box count by service type?",
     "How many boxes were from places called Union something?",
     "What's the price of diesel in California?",
@@ -419,7 +477,7 @@ def run_probe(task_index, summary_text=None):
 
 compactions = 0
 records = []
-TURN_TARGET = 200
+TURN_TARGET = 20
 
 run_probe(-1)   # baseline, before anything has happened
 
