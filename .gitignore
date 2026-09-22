@@ -13,3 +13,4 @@ workspace/*
 dumps/
 notes/phase0_old.md
 scratch.py
+corpus/
