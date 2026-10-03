@@ -7,9 +7,9 @@ from pypdf import PdfReader
 from extract_chapters import is_safe_path
 
 BASE_DIR = Path(__file__).parent
+min_separation_ratio=0.30
 
-
-def find_gutter(x_positions, bucket_size=20):
+def find_gutter(x_positions, page_width, bucket_size=20):
     """Find the x-value that best separates the left column from the right
     column, by grouping fragment start-positions into buckets and taking
     the two most common buckets -- those are the real column margins,
@@ -32,12 +32,14 @@ def find_gutter(x_positions, bucket_size=20):
     (left_margin, _), (right_margin, _) = common
     if left_margin > right_margin:
         left_margin, right_margin = right_margin, left_margin
+    # NEW: too close together = an indent, not a second column
+    if right_margin - left_margin < page_width * min_separation_ratio:
+        return float("inf")
     return (left_margin + right_margin) / 2
 
 
 def extract_two_column_pages(pdf_path, page_indices=None):
-    """Like extract_two_column_text, but returns one record per page
-    instead of one joined string, so page identity survives into chunking."""
+    """Returns one record per page, so page identity survives into chunking."""
     reader = PdfReader(pdf_path)
     pages = reader.pages if page_indices is None else [reader.pages[i] for i in page_indices]
 
@@ -52,7 +54,7 @@ def extract_two_column_pages(pdf_path, page_indices=None):
 
         page.extract_text(visitor_text=visitor)
 
-        gutter = find_gutter([x for x, _ in fragments])
+        gutter = find_gutter([x for x, _ in fragments], float(page.mediabox.width))
         left, right = [], []
         for x, text in fragments:
             (left if x < gutter else right).append(text)
@@ -84,8 +86,8 @@ def join_pages_with_offsets(pages, separator="\n\n"):
 
 
 def chunk_with_offsets(text, chunk_size, overlap):
-    """Same slicing behavior as fixed_size_chunk, but returns each chunk's
-    character range alongside its text so it can be mapped back to pages."""
+    """Fixed size slicing with overlap. Returns each chunks text plus its character range 
+    so it can be mapped back to pages"""
     chunks = []
     start = 0
     while start < len(text):
