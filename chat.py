@@ -1,11 +1,12 @@
 import os
 from dotenv import load_dotenv
 from anthropic import Anthropic
+from llm import client, MODEL, BACKEND
+
+print(f"[backend: {BACKEND} | model: {MODEL}]")
 
 load_dotenv()
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-MODEL = "claude-haiku-4-5-20251001"
 PROMPTS = {
     "terse": "You are a terse assitant. Ansewr in one or two sentences",
     "scoped": """You only answer quetsions about data platforms and analytics. 
@@ -39,7 +40,7 @@ while True:
     # TODO 2 pull the text out of the response
     #   response.content is a LIST of blocks, not a string
 
-    reply_text = response.content[0].text
+    reply_text = next(b.text for b in response.content if b.type == "text")
     print(reply_text)
     print(f"[in: {response.usage.input_tokens} | out: {response.usage.output_tokens}]")
     messages.append({"role": "assistant", "content": reply_text})
