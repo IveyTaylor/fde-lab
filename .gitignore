@@ -14,5 +14,4 @@ dumps/
 notes/phase0_old.md
 scratch.py
 corpus/
-rag/chunks.json
-rag/_pychche_
+rag/chunks*.json

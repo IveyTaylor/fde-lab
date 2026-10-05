@@ -1,4 +1,5 @@
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from pypdf import PdfReader
 from extract_chapters import is_safe_path
 
 BASE_DIR = Path(__file__).parent
-min_separation_ratio=0.30
+MIN_SEPARATION_RATIO = 0.30
 
 def find_gutter(x_positions, page_width, bucket_size=20):
     """Find the x-value that best separates the left column from the right
@@ -33,7 +34,7 @@ def find_gutter(x_positions, page_width, bucket_size=20):
     if left_margin > right_margin:
         left_margin, right_margin = right_margin, left_margin
     # NEW: too close together = an indent, not a second column
-    if right_margin - left_margin < page_width * min_separation_ratio:
+    if right_margin - left_margin < page_width * MIN_SEPARATION_RATIO:
         return float("inf")
     return (left_margin + right_margin) / 2
 
@@ -93,6 +94,8 @@ def chunk_with_offsets(text, chunk_size, overlap):
     while start < len(text):
         end = start + chunk_size + overlap
         chunks.append({"start": start, "end": min(end, len(text)), "text": text[start:end]})
+        if end >= len(text):
+            break   # this chunk reached the end; another would be pure overlap
         start += chunk_size
     return chunks
 
@@ -105,12 +108,15 @@ def pages_for_range(start, end, page_spans):
     return min(covered), max(covered)
 
 
-def build_chunk_records(pdf_path, source_url, chunk_size=1000, overlap=100):
+def build_chunk_records(pdf_path, source_url, chunk_size=1000, overlap=100, method="fixed"):
     """Full pipeline for one document: extract -> join with offsets ->
     chunk with offsets -> attach metadata."""
     pages = extract_two_column_pages(pdf_path)
     full_text, page_spans = join_pages_with_offsets(pages)
-    chunks = chunk_with_offsets(full_text, chunk_size, overlap)
+    if method == "structure":
+        chunks = chunk_by_structure(full_text, chunk_size, overlap)
+    else:
+        chunks = chunk_with_offsets(full_text, chunk_size, overlap)
 
     records = []
     for i, chunk in enumerate(chunks):
@@ -124,6 +130,7 @@ def build_chunk_records(pdf_path, source_url, chunk_size=1000, overlap=100):
             "page_start": page_start,
             "page_end": page_end,
             "chunk_index": i,
+            "method": method,
             "chunk_size": chunk_size,
             "overlap": overlap,
             "char_count": len(chunk["text"]),
@@ -131,7 +138,7 @@ def build_chunk_records(pdf_path, source_url, chunk_size=1000, overlap=100):
     return records
 
 
-def process_corpus(corpus_dir, sources_path, output_path, chunk_size=1000, overlap=100):
+def process_corpus(corpus_dir, sources_path, output_path, chunk_size=1000, overlap=100, method="fixed"):
     """Loop every PDF in corpus_dir, skipping/logging failures instead of
     halting, and write all chunk records out as one JSON file."""
     corpus_dir = Path(corpus_dir)
@@ -142,7 +149,7 @@ def process_corpus(corpus_dir, sources_path, output_path, chunk_size=1000, overl
     for pdf_path in sorted(corpus_dir.glob("*.pdf")):
         source_url = sources.get(pdf_path.name)
         try:
-            records = build_chunk_records(pdf_path, source_url, chunk_size, overlap)
+            records = build_chunk_records(pdf_path, source_url, chunk_size, overlap, method)
             all_records.extend(records)
             print(f"OK   {pdf_path.name}: {len(records)} chunks")
         except Exception as e:
@@ -157,13 +164,47 @@ def process_corpus(corpus_dir, sources_path, output_path, chunk_size=1000, overl
     if errors:
         print(f"{len(errors)} file(s) failed: {[name for name, _ in errors]}")
 
+# A numbered ALL-CAPS heading like "1. PURPOSE." or "3. RELATED PUBLICATIONS."
+# Lookbehind: preceded by whitespace (or start of text), not necessarily a
+# newline, because fragments are joined with "" and many headings sit mid-line.
+# Lookahead: match the position *before* the heading, without consuming it.
+HEADING_RE = re.compile(r"(?:^|(?<=\s))(?=\d{1,2}\.\s+[A-Z]{2,}[A-Z ,'()/-]*\.)")
+
+def chunk_by_structure(text, chunk_size, overlap, min_size=200):
+    """Split at numbered section headings; merge tiny sections forward;
+    fall back to fixed-size slicing inside any section that's too big.
+    Same {start, end, text} output shape as chunk_with_offsets."""
+    max_size = chunk_size + overlap #match fixed_size's real chunk length
+
+    # 1. Cut points: start fo text, every heading, end fo text
+    cuts = [0] + [m.start() for m in HEADING_RE.finditer(text) if m.start() > 0] + [len(text)]
+    sections = [(a, b) for a, b in zip(cuts, cuts[1:]) if text[a:b].strip()]
+
+    # 2. Merge: if the previous section is tiny, absorb this one into it.
+    merged = []
+    for a, b in sections:
+        if merged and merged[-1][1] - merged[-1][0] < min_size:
+            merged[-1] = (merged[-1][0], b)
+        else:
+            merged.append((a, b))
+
+    # 3. Emit sections; split oversize ones with the fixed-size chunker,
+    #    shifting its offsets from section-relative back to full_text-relative.
+    chunks = []
+    for a, b in merged:
+        if b - a <= max_size:
+            chunks.append({"start": a, "end": b, "text": text[a:b]})
+        else:
+            for c in chunk_with_offsets(text[a:b], chunk_size, overlap):
+                chunks.append({"start": a + c["start"], "end": a + c["end"], "text": c["text"]})
+    return chunks
 
 if __name__ == "__main__":
-    # single-file smoke test, matching the same input chunking.py's __main__
-    # used, so the two are easy to compare while this file is still new.
-    PDF_PATH = BASE_DIR.parent / "corpus" / "faa" / "Aviation_Weather_Chapters9_11.pdf"
-    process_corpus(
-        corpus_dir=BASE_DIR.parent / "corpus" / "faa",
-        sources_path=BASE_DIR / "sources.json",   # doesn't exist yet; the code handles that and leaves citation URLs empty
-        output_path=BASE_DIR / "chunks.json",     # must be inside rag/ or your safety check refuses to write it
-    )
+    for method, out_name in [("fixed", "chunks.json"), ("structure", "chunks_structure.json")]:
+        print(f"\n=== {method} ===")
+        process_corpus(
+            corpus_dir=BASE_DIR.parent / "corpus" / "faa",
+            sources_path=BASE_DIR / "sources.json",
+            output_path=BASE_DIR / out_name,
+            method=method,
+        )
