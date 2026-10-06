@@ -108,9 +108,29 @@ def pages_for_range(start, end, page_spans):
     return min(covered), max(covered)
 
 
-def build_chunk_records(pdf_path, source_url, chunk_size=1000, overlap=100, method="fixed"):
+def resolve_source(entry):
+    """Normalize one sources.json value into (source_url, is_excerpt).
+
+    sources.json allows two shapes per file:
+      "file.pdf": "https://..."                          -> whole document
+      "file.pdf": {"url": "https://...", "excerpt": true} -> a page-range
+                                                             excerpt of that URL
+    A file missing from sources.json comes in as None."""
+    if entry is None:
+        return None, False
+    if isinstance(entry, dict):
+        return entry.get("url"), entry.get("excerpt", False)
+    return entry, False
+
+
+def build_chunk_records(pdf_path, source_url, chunk_size=1000, overlap=100, method="fixed",
+                        is_excerpt=False):
     """Full pipeline for one document: extract -> join with offsets ->
-    chunk with offsets -> attach metadata."""
+    chunk with offsets -> attach metadata.
+
+    is_excerpt: the local PDF is a slice of the document at source_url, so
+    local page numbers don't match the original. Link to the document
+    itself, with no #page= anchor, rather than to a wrong page."""
     pages = extract_two_column_pages(pdf_path)
     full_text, page_spans = join_pages_with_offsets(pages)
     if method == "structure":
@@ -121,12 +141,18 @@ def build_chunk_records(pdf_path, source_url, chunk_size=1000, overlap=100, meth
     records = []
     for i, chunk in enumerate(chunks):
         page_start, page_end = pages_for_range(chunk["start"], chunk["end"], page_spans)
-        citation_url = f"{source_url}#page={page_start}" if source_url and page_start else None
+        if not source_url:
+            citation_url = None
+        elif is_excerpt or not page_start:
+            citation_url = source_url  # whole document, no page anchor
+        else:
+            citation_url = f"{source_url}#page={page_start}"
         records.append({
             "text": chunk["text"],
             "source_file": Path(pdf_path).name,
             "source_url": source_url,
             "citation_url": citation_url,
+            "is_excerpt": is_excerpt,
             "page_start": page_start,
             "page_end": page_end,
             "chunk_index": i,
@@ -147,9 +173,10 @@ def process_corpus(corpus_dir, sources_path, output_path, chunk_size=1000, overl
     all_records = []
     errors = []
     for pdf_path in sorted(corpus_dir.glob("*.pdf")):
-        source_url = sources.get(pdf_path.name)
+        source_url, is_excerpt = resolve_source(sources.get(pdf_path.name))
         try:
-            records = build_chunk_records(pdf_path, source_url, chunk_size, overlap, method)
+            records = build_chunk_records(pdf_path, source_url, chunk_size, overlap, method,
+                                          is_excerpt=is_excerpt)
             all_records.extend(records)
             print(f"OK   {pdf_path.name}: {len(records)} chunks")
         except Exception as e:
