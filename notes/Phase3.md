@@ -82,4 +82,70 @@ and that has been fixed by setting a parameter:
 if the margins are separated by less than the ratio (currently 0.30), it's one column
  if right_margin - left_margin < page_width * MIN_SEPARATION_RATIO:
         return float("inf")
-        
+
+Extraction: source format in, Python data out. The containers are a short list in practice:
+str, list (of str's), dict (each item is text plus label, like "page number": 1, "text": "blah blah")
+A good extractor doesn't just return text, it returns what it's inferred about the format, like headings, two columns, etc. It has to use regex to infer stuff.
+    *You don't HAVE to do this with docs, b/c they have headings and different metadata that tells you what things are
+Chunking: this DECIDES WHERE THE BOUNDARIES GO. Usually that means slicing, but sometimes it means putting little sections together.
+
+Skew Decision: most of our chunks happened to be in one file, but that's okay, it 
+mirrors reality. 
+
+### Fixed vs. structure-aware chunking (Oct 4)
+
+Scope: the 3 PDFs with numbered section headings (dot_71398, dot_67915, dot_72241).
+The other 3 (Aviation Weather, dot_39153, the checklist) have no matching headings,
+so both methods produce the same chunks there.
+
+| Metric | Fixed | Structure |
+|---|---|---|
+| Chunks | 33 | 41 |
+| Start at a section heading | 0 | 18 |
+| Contain a heading mid-chunk (two topics mixed) | 15 | 3 |
+| End mid-word (rough: last char is a letter) | 24 | 15 |
+| Median size (chars) | 1,100 | 1,014 |
+
+Per file:
+
+| File | Fixed | Structure |
+|---|---|---|
+| dot_71398 | 10 | 14 |
+| dot_67915 | 11 | 14 |
+| dot_72241 | 12 | 13 |
+| All 6 PDFs | 426 | 434 |
+
+- The 3 mixed chunks under structure are deliberate merges of tiny sections
+  (e.g. "2. CANCELLATION" + "3. RELATED PUBLICATIONS").
+- The remaining mid-word cuts come from the fixed-size fallback inside long sections.
+- This shows structure chunks are cleaner, not that they retrieve better.
+  That gets tested by the eval at the Oct 18 gate.
+
+*********************
+Now we're into embedding. Here are 4 sentences I put into scratch.py:
+sentences = [
+    "The altimeter must be tested every 24 months.",
+    "Altimeter and static system checks are required every two years.",
+    "Keep cooking fires well clear of the helicopter landing area.",
+    "How do I get to Salisbury from Charlotte?",
+]
+...and here are the cosines of their vectors compared to each other:
+0 vs 1: 0.8340
+0 vs 2: 0.4547
+1 vs 2: 0.4214
+0 vs 3: 0.3202
+1 vs 3: 0.3162
+2 vs 3: 0.3782
+
+Note that the one about directions [3] has the lowest. Even though totally unrelated, the score "floor" is about .31.
+
+Question and answer is the main goal in RAG. Here's how it works, user asks a question, and you compare that question to
+ALL the answers (vectors) in the text...you are hoping the "right" answer (for your testing, you will already know the right
+answer) is in the top 5 that your code sends back. 
+
+If you prefix all the statements with something, all the scores will go up automatically. This is because the vectors
+will get closer just based on having the same prefix.
+
+I just finished chunking and embedding the FAA corpus...it took 58 minutes total, which is pretty slow. At this pace it would take 
+about 10 hours to do 10k Intellisoft chunks. I need to figure out why this is so slow right now.
+

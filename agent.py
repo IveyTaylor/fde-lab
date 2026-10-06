@@ -363,7 +363,7 @@ tasks = [
     "How many quote requests came in last month?",
     "Which customers have never had a pickup?",
     "Piedmont Family dentistry needs a week lead time. When can we pick up for them next?"
-    "Can you remember that Catawba Valley Orthopedics always needs 2 weeks lead time for a pickup?"
+    #"Can you remember that Catawba Valley Orthopedics always needs 2 weeks lead time for a pickup?"
     "What's the average box count by service type?",
     "How many boxes were from places called Union something?",
     "What's the price of diesel in California?",
