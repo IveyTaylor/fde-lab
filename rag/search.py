@@ -47,6 +47,7 @@ if __name__ == "__main__":
     records = load_index(BASE_DIR / "embeddings_structure.json")
 
     question = "What does AC 43-203B cover?"
+    question = "What do you do when you run into turbulence?"
     print(f"\nQ: {question}\n")
     for score, r in search(question, records):
         preview = r["text"][:80].replace("\n", " ")

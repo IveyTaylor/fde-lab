@@ -4,7 +4,7 @@ from search import load_index, search
 BASE_DIR = Path(__file__).parent
 
 if __name__ == "__main__":
-    records = load_index(BASE_DIR / "embeddings_fixed.json")
+    records = load_index(BASE_DIR / "embeddings.json")
     while True:
         question = input("\nQ (blank to quit): ").strip()
         if not question:
