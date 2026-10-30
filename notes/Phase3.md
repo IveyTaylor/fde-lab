@@ -149,3 +149,37 @@ will get closer just based on having the same prefix.
 I just finished chunking and embedding the FAA corpus...it took 58 minutes total, which is pretty slow. At this pace it would take 
 about 10 hours to do 10k Intellisoft chunks. I need to figure out why this is so slow right now.
 
+**** Important lesson about cosine
+cosine measures "are these the same topic", not "does this answer the question"
+I was asking how often do you have to check the altimeter, and it got .81 with a passage about altimeter regulations, NOT a
+direct answer to the question.
+
+Also, what about a chunk that has several different topics in it? "I like chocolate, cats are mammals, Greece is a sunny country" has
+several different ideas, and the vector would be an average of all 3--this is called DILUTION. This is exactly why structure-aware 
+chunking is so important. If you grab paragraphs together you have a better chance at accurate vectors, hence better chance right answers.
+
+Weakness of vector search: keywords
+I looked for "AC 43-203B", and didn't get anything for that keyword (even tho the keyword IS in the corpus), but DID get AC 43-203A. 
+This is because vector search doesn't look for keywords, and a pure vector search found that the chunk 203A lives in to be closer than any chunks 203B lives in.
+  This is why you need to build a hybrid-retrieval solution, that's coming soon
+
+(Claude's version of what I said about cosine above)
+### Weakness of vector search: identifiers (q02, Oct 7)
+Searched "What does AC 43-203B cover?" Top result was the "2. CANCELLATION ... AC 43-203A
+is canceled" chunk -- which is FROM the 203B doc (dot_71398). Right document, wrong chunk.
+203B IS in the corpus (6 chunks: the cover page, page footers, and the checklist on dot_67925 p.55).
+
+Why: to an embedding, "203A" and "203B" mean nearly the same thing -- it doesn't treat that
+last letter as important. Made worse by our data:
+  - the chunk that actually says "AC 43-203B" is full of OCR junk, which dilutes its vector
+  - the other 203B mentions are buried in footers of chunks about other topics
+Keyword search would match "203B" exactly. That's why hybrid retrieval (vector + keyword) is next.
+
+Eval caveat: q02 will score as a HIT, because the CANCELLATION chunk is on page 1 and the
+eval is labeled by page. Page-level labels can pass the wrong chunk. Spot-check the text on hits.
+
+One limitation:
+Recall@5 is page-level: it measures whether a human could find the answer, and overstates whether the LLM got the answer text.
+  We are going to fix this later on
+
+****  

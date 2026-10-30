@@ -42,8 +42,9 @@ create an email for "a customer", it sent a query with `LIMIT 1` at the end. Not
 to do with my code, just the model being smart and generally on the side of parsimony.
 
 **Another important takeaway:** you have to make sure the agent cant get out of the folder 
-structure you want it in. Theres a function called WORKSPACE = Path("workspace").resolve()
-This function basically makes sure that the agent CANNOT go outside of the path of your
+structure you want it in. Theres a variable called WORKSPACE 
+  WORKSPACE = Path("workspace").resolve()
+This basically makes sure that the agent CANNOT go outside of the path of your
 current workspace. It cant go up a level and mess with your computer. 
 **When you let an Agent write files on your file system, thats serious.
 
