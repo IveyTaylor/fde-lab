@@ -183,3 +183,18 @@ Recall@5 is page-level: it measures whether a human could find the answer, and o
   We are going to fix this later on
 
 ****  
+## Results of Evaluation
+Both chunking models (the structured and fixed) scored 19/20 correct. However, it was an eval that isn't great at separating models, because 80% of the chunks were from one file, and getting answers from a small file are easy.  
+
+Recall@5 = .95 is a low bar for a 20 question eval set on 6 documents.
+
+I'll need to get better data from Intellisoft, rechunk a bunch of them and do another eval. This should give a much better delta between (hopefully) fixed and structured, with structured winning.
+
+### metadata filtering notes under Evaluation
+    question = "What does AC 43-203B cover?"
+
+Boilerplate sections act as "magnets". They have a lot of terms that are repeated and are searched for, like titles, tables of contents, etc. They are almost always false positives.
+
+The checklist considers the top k (in this case 5). I did an experiment on a known question, with the right file, a wrong file, and no filter (all 6 files). Only the right file got the right answer to show up in the top 5.
+
+A few answers had close to the same text, for instance one that had AC 43-203A showed up, but that doesn't help us here.
