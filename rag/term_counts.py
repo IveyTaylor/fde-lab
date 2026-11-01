@@ -14,11 +14,11 @@ TERMS = [
     ("ac 00-13",   "dot_67915_ds1.pdf"),
     ("rvr 4000",   "dot_67915_ds1.pdf"),
     ("RVRNO",      "dot_67915_ds1.pdf"),
-    ("A C 00-45",  "aviation_weather_chapters9_11.pdf"),  # OCR spacing, kept as extracted
+    ("A C 00-45",  "aviation_weather_chapters9_11.pdf"),  
     ("00-45",  "aviation_weather_chapters9_11.pdf"),  
 ]
 
-with open("chunks.json", encoding="utf-8") as f:
+with open("chunks_structure.json", encoding="utf-8") as f:
     chunks = json.load(f)
 
 for term, expected_source in TERMS:
@@ -29,7 +29,5 @@ for term, expected_source in TERMS:
         if term == "00-45":
             i = m["text"].lower().find(term.lower())
             start = max(0, i - 40)
-            end = i + 40
             snippet = m["text"][start: i + len(term) + 40]
-            print(snippet)
-            
+            repr(snippet)

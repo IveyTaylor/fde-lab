@@ -21,7 +21,7 @@ def is_hit(results, expected):
     """True if any search result lands on an expected file + page."""
     for score, r in results:                         # each of the top-k results
         for e in expected:                           # each acceptable answer location
-            if r["source_file"] == e["source_file"] and r["page_start"] in e["pages"]:
+            if r["source_file"] == e["source_file"] and any(r["page_start"] <= p <= r["page_end"] for p in e["pages"]):
                 return True                          # found a match, stop looking
     return False                                     # checked everything, no match
 
