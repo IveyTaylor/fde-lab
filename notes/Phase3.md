@@ -198,3 +198,49 @@ Boilerplate sections act as "magnets". They have a lot of terms that are repeate
 The checklist considers the top k (in this case 5). I did an experiment on a known question, with the right file, a wrong file, and no filter (all 6 files). Only the right file got the right answer to show up in the top 5.
 
 A few answers had close to the same text, for instance one that had AC 43-203A showed up, but that doesn't help us here.
+
+## Oct 31 — identifier harvest (step 1 of Nov 8 gate)
+
+**What I did**
+- Built `rag/term_counts.py`: list of (term, expected_source) tuples, case-insensitive
+  substring match against every chunk in chunks.json, prints count per term (zeros
+  visible) and each match's source/page with an expected-source check, plus context
+  snippets.
+- Harvested 15 candidate identifiers across 5 of 6 docs. Sorted by chunk count:
+  - unique: rvr 4000, RVRNO
+  - few: Frayser, 43-2a, 91.170, ac 91-32, ac 00-13
+  - many: checklist office codes (afs-630 = 60 chunks). Most dropped; nobody asks a bot about office codes.
+
+**Findings**
+- AC 00-45 appears in three forms in the extracted text:
+  - AW p.12: "AC 00-45" (clean)
+  - AW p.15: "AG 00-45" (text layer wrong; PDF shows AC; small caps)
+  - checklist p.11/57/73: "00-45D" (no AC prefix, revision suffix)
+  Searching "ac 00-45" finds 1 of 5; "00-45" finds all 5.
+- What I see in the PDF isn't necessarily what's in the index. "A C 00-45" (as I read it
+  in the viewer) matched 0 chunks. Harvest from chunk text, not the PDF.
+- Substring matching has no boundaries: "170" matched 13 chunks, mostly not 91.170.
+- Checklist p.57 is a flattened table (columns interleaved). Extraction failure, same as
+  the dot_67915 RVR table.
+- 91.170 "in dot_72241" was my harvesting mislabel, not extraction. Checked the cheap
+  explanation first.
+- My own expected_source strings failed like identifiers: "chapters_9" vs "Chapters9",
+  plus a typo. One-character differences break exact matching, in my test data too.
+  My lesson here is to copy, don't type.
+- The intent of a question decides the right chunk, not the identifier. "What covers X" →
+  content page; "how do I order X" → checklist entry. Same term, different answer. I hope
+  that the LLM interacting with the questioner will choose the right of the top 5 answers.
+
+**Design questions for the keyword layer**
+- Match the whole query string, or extract the identifier (e.g. "00-45") from the query?
+- Word boundaries kill "170"→"1700" noise but also miss "00-45D". Pick a rule and say why.
+- Case: lowercase both sides (decided). This was a good practice for me in doing lowercase
+- for both sides of the equation. "CaseWord".lower() = "cASewOrd".lower()
+
+**Question shortlist (not written yet)**
+rvr 4000; RVRNO; Frayser; 43-2a; 91.170; ac 91-32 or ac 00-13;
+7a AC 00-45 turbulence intensities (AW p.12); 7b AC 00-45 icing table (AW p.15, AG error);
+8 AC 00-45 price/ordering (checklist p.73). Write each with a label and vector/hybrid
+predictions. Commit before building the keyword layer.
+
+**Still to do:** run term_counts against chunks_structure.json.
