@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from search import load_index, search
+from search_vector import load_index, search
 
 BASE_DIR = Path(__file__).parent
 QUESTIONS_PATH = BASE_DIR / "eval_questions.jsonl"
