@@ -19,6 +19,6 @@ def search(question, records):
         
 if __name__ == "__main__":
     records = load_index("embeddings.json")
-    for r in search("Does AC 43-203B replace AC 43-2A?", records):
+    for r in search("What does FAR 91.170 require?", records):
         print(r["source_file"], r["page_start"])
 
