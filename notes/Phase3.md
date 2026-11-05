@@ -243,4 +243,47 @@ rvr 4000; RVRNO; Frayser; 43-2a; 91.170; ac 91-32 or ac 00-13;
 8 AC 00-45 price/ordering (checklist p.73). Write each with a label and vector/hybrid
 predictions. Commit before building the keyword layer.
 
-**Still to do:** run term_counts against chunks_structure.json.
+### ran the eval against the chunks_structure.json 
+basically got the same answers
+the differences are due to overlap differences from the way chunks are chunked
+
+ran eval.py after the page range fix and still 20/21 for both chunking schemes
+
+## Vector search vs Hybrid tips
+exact strings carry almost no weight with vector search. It's good at finding meaning, not 
+good at finding strings.
+For instance, looking for RVR 4000 is a risk to vector search, but I feel good about hybrid
+
+Ask yourself 3 questions to get a good question for vector/hybrid search:
+1. How many chunks have the topic?
+2. What makes the RIGHT chunk different from the wrong chunks?
+3. How many chunks contain the exact term?
+
+  For RVRNO:
+  1. Lots
+  2. The question: "What does it mean when RVR is reported as RVRNO?" in fact DOES separate
+      most of the chunks from the RIGHT chunk (so lean yes on vector). 
+  3.  Only 1, The exact string is only in one chunk, so confident HIT with hybrid
+
+For the Robert Frayser carbon monoxide cautionary tale, there are 2 chunks that both might
+seem to answer the question "Why did Robert Frayser's plane go down?" The first one is he
+told folks he fell asleep, but the seoncd one is the real answer--he had a carbon monoxide
+leak and THAT caused him to fall asleep.
+
+## What causes questions to "miss"
+1. Only the string and no other "topic words" in the question to work with. 
+    "What does AC-113 cover?"
+2. The right chunk has lookalike neighbors very similar. 
+    RVR 4000 is close to RVR 2000
+3. The right chunk is garbled by ingestion/OCR
+4. One big document crowds the top 5
+
+## 3 Decisions about the keyword searching layer
+1. Match only the identifier (identifier is the proper term for what I think of as keyword). Returns a list so more than one keywords is possible.
+2. Boundary Rule: build B first, then test against A with an eval:
+  A. Graded: For text just before or after the identifier, we will return it but will give more weight to the identifier with a space before and after.
+  B. Rule-based: text attached AFTER will be considered (405B is a revision of 405). A digit or / attached BEFORE will not be returned. Anything else before or after (space, paren, commas, etc) is fine
+3. Chunk Score: binary or weighted (weighted means more recurrances scores more)
+  Let's go with binary and let vector score break the tie between multiple chunks that keyword search returns a hit for.
+
+
