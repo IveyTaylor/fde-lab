@@ -19,6 +19,6 @@ def search(question, records):
         
 if __name__ == "__main__":
     records = load_index("embeddings.json")
-    for r in search("What does FAR 91.170 require?", records):
+    for r in search("How much trouble is turbulence?", records):
         print(r["source_file"], r["page_start"])
 

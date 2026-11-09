@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 from search_vector import load_index, search
+import search_vector
+import search_hybrid
 
 BASE_DIR = Path(__file__).parent
 QUESTIONS_PATH = BASE_DIR / "eval_questions.jsonl"
@@ -25,7 +27,7 @@ def is_hit(results, expected):
                 return True                          # found a match, stop looking
     return False                                     # checked everything, no match
 
-def run_eval(records, questions, label):
+def run_eval(records, questions, label, search_fn):
     hit_count = 0
     scored = 0    
     print(f"\n=== {label} ===")          # ← new: blank line, then the label
@@ -33,7 +35,7 @@ def run_eval(records, questions, label):
         if question["type"] == "unanswerable":
             continue
         else:
-            results = search(question["question"], records)
+            results = search_fn(question["question"], records)
             hit = is_hit(results, question["expected"])
             if hit: 
                 hit_count += 1
@@ -46,8 +48,11 @@ def run_eval(records, questions, label):
 
 if __name__ == "__main__":
     questions = load_questions(QUESTIONS_PATH)
-    records_fixed = load_index(FIXED_INDEX)
-    records_structure = load_index(STRUCTURE_INDEX)
-    fixed = run_eval(records_fixed, questions, "fixed")
-    structure = run_eval(records_structure, questions, "structure")
-    print(f"\nstructure vs fixed: {structure - fixed:+.2f}")
+    records_fixed = search_vector.load_index(FIXED_INDEX)
+    records_structure = search_vector.load_index(STRUCTURE_INDEX)
+    vector_fixed = run_eval(records_fixed, questions, "vector fixed", search_vector.search)
+    vector_structure = run_eval(records_structure, questions, "vector structure", search_vector.search)
+    hybrid_fixed = run_eval(records_fixed, questions, "hybrid fixed", search_hybrid.search)
+    hybrid_structure = run_eval(records_structure, questions, "hybrid structure", search_hybrid.search)
+    print(f"\nhybrid vs vector, fixed:     {hybrid_fixed - vector_fixed:+.2f}")
+    print(f"hybrid vs vector, structure: {hybrid_structure - vector_structure:+.2f}")

@@ -286,4 +286,38 @@ leak and THAT caused him to fall asleep.
 3. Chunk Score: binary or weighted (weighted means more recurrances scores more)
   Let's go with binary and let vector score break the tie between multiple chunks that keyword search returns a hit for.
 
+## Phase 3 Post Mortem
+
+### Results (recall@5, page-level, 30 scored questions)
+
+| | Identifier (13) | Other (17) | Total |
+|---|---|---|---|
+| Vector fixed | 10 | 17 | 27/30 |
+| Vector structure | 11 | 17 | 28/30 |
+| Hybrid fixed | 11 | 17 | 28/30 |
+| Hybrid structure | 11 | 17 | 28/30 |
+
+Every miss is an identifier question. Hybrid caused no regressions on the other 17.
+
+### Pure vector misses identifiers, for different reasons
+- **q28 "What does FAR 91.170 require?" — dilution.** The fixed chunker put three ideas in one 1,100-char chunk: the 91.170 requirement, "see other documents," and "this replaces 43-203A." The answer was in the chunk, but the other themes pulled its vector too far away to make the top 5. The structure chunker fixed this on its own: "4. GENERAL" became a short one-theme chunk, and it made the top 5. [1, merged sections]
+- **q29 "What does AC 00-13 cover?" — catalog crowding.** The top vector results were AC Checklist chunks (79% of the corpus). None of them contain "00-13". They win because "a list of what ACs cover" matches the gist of "what does an AC cover?", and the embedding barely registers the number itself. [1, 2]
+- **q07 — vector cause unknown.** [1]
+- **q02 — look-alike IDs.** It scores a HIT, but the embedding treats 203A ≈ 203B, and the real answer chunk (PURPOSE) never made the top 5. [1]
+
+### Hybrid fixed q28 on the fixed chunker, but not q07 or q29
+On q07 and q29 the keyword step **did find the labeled page**, so the revision-letter limitation is not the cause for q07. They failed in the fusion. [6]
+
+How: keyword matches all score the same, so my tie-break sorts the keyword list by vector score. The vector list and keyword list had no overlap, so RRF interleaved them: 3 vector slots, 2 keyword slots. [3, 4]
+- q29: the two keyword slots went to p.2–3 chunks that scored higher on vector than the p.1 answer chunk.
+- q07: catalog chunk 279 (it lists AC 91-32A) took one keyword slot. On fixed, the p.1–2 chunk landed at **rank 6**: keyword rank 3, score 1/63, lost the tie with vector rank 3. [5, 6]
+
+The flaw: the keyword list is ordered by the same vector score that already missed. **Fix to try:** rank keyword matches by something other than vector score, or weight an exact identifier match above a vector-only hit.
+
+### What the number doesn't show
+Recall@5 is page-level. A HIT means the right page is in the top 5, not that the answer chunk is (see q02).
+
+### Next
+- Phase 5 experiment, decided before running: recall at k = 5, 6, 10 for both methods. Odd k plus no overlap gives vector the extra slot. [7]
+- The eval set is too small to separate the methods: 13 identifier questions, and one flip is the whole difference. Intellisoft's support team needs to supply real questions.
 

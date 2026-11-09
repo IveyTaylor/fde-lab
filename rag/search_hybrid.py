@@ -36,13 +36,37 @@ def search(question, records, k=5):
         scores[key] = scores.get(key, 0) + 1 / (60 + rank)
 
     ranked = sorted(scores.items(), key=lambda kv: (kv[1], cosine_by_key[kv[0]]), reverse=True)
-    for key, value in ranked:
-        print(key, round(value, 4))
 
     return [(value, record_by_key[key]) for key, value in ranked[:k]]
 
 if __name__ == "__main__":
-    records = search_vector.load_index(BASE_DIR / "embeddings.json")
-    for score, r in search("What does AC 43-203B cover?", records):
-        print(f"{score:.4f} | {r['source_file']} chunk {r['chunk_index']} p.{r['page_start']}")
-        
+    import json
+    import search_keyword
+
+    QUESTION_ID = "q07"
+
+    # 1. Find the question and its label in the eval set
+    with open(BASE_DIR / "eval_questions.jsonl", encoding="utf-8") as f:
+        qs = [json.loads(line) for line in f if line.strip() != ""]
+    q = [q for q in qs if q["id"] == QUESTION_ID][0]
+    print(f"{q['id']}: {q['question']}")
+    print(f"Expected: {q['expected']}\n")
+
+    for index_file in ["embeddings.json", "embeddings_structure.json"]:
+        records = search_vector.load_index(BASE_DIR / index_file)
+        print(f"=== {index_file} ===")
+
+        # 2. What hybrid returns in its top 5
+        print("Hybrid top 5:")
+        results = search(q["question"], records)[:5]
+        for rank, (score, r) in enumerate(results, 1):
+            has_id = "00-13" in r["text"]
+            print(f"  {rank}. {score:.4f} | {r['source_file']} chunk {r['chunk_index']} "
+                  f"p.{r['page_start']}-{r['page_end']} | contains '00-13': {has_id}")
+
+        # 3. What the keyword step matched, and where those chunks sit
+        print("Keyword matches:")
+        for r in search_keyword.search(q["question"], records):
+            print(f"  {r['source_file']} chunk {r['chunk_index']} "
+                  f"p.{r['page_start']}-{r['page_end']}")
+        print()
