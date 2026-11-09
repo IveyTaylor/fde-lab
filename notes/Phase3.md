@@ -321,3 +321,4 @@ Recall@5 is page-level. A HIT means the right page is in the top 5, not that the
 - Phase 5 experiment, decided before running: recall at k = 5, 6, 10 for both methods. Odd k plus no overlap gives vector the extra slot. [7]
 - The eval set is too small to separate the methods: 13 identifier questions, and one flip is the whole difference. Intellisoft's support team needs to supply real questions.
 
+Test git upgraded security (2FA)

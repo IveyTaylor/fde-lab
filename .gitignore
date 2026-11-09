@@ -16,3 +16,4 @@ scratch.py
 corpus/
 rag/chunks*.json
 rag/embeddings*.json
+Claude outputs/
