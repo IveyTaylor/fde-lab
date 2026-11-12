@@ -1,5 +1,19 @@
-import sys
 import json
+import sqlite3
+from pathlib import Path
+import sys
+
+DB_PATH = Path(__file__).parent / "shane.db"
+
+# Copied from agent.py run_sql (Nov 11). Changes: absolute DB path; returns a string.
+def run_sql(query):
+    conn = sqlite3.connect(f"{DB_PATH.as_uri()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(query).fetchall()
+        return json.dumps([dict(r) for r in rows])
+    finally:
+        conn.close()
 
 for line in sys.stdin:
     if not line.strip():
@@ -45,16 +59,23 @@ for line in sys.stdin:
     elif msg["method"] == "tools/call":
         name = msg["params"]["name"]
         query = msg["params"]["arguments"]["query"]
+        try:
+            text = run_sql(query)
+            is_error = False            
+        except sqlite3.Error as e:
+            is_error = True
+            text = f"tools/call failed: {str(e)}"
         reply = {
             "jsonrpc": "2.0",
             "id": msg["id"],
             "result": {
-                "content": [{"type": "text", "text": f"would run: {query}"}],
-                "isError": False,
+                "content": [{"type": "text", "text": text}],
+                "iserror": is_error,
             },
         }
     else:
         continue
+
 
     print(json.dumps(reply), flush=True)
     
