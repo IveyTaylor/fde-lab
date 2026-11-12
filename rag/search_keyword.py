@@ -1,5 +1,4 @@
 import re
-from eval import load_questions
 from search_vector import load_index
 
 ID_PATTERN = r"\d+[-.]\d+[A-Z]?"

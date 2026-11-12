@@ -2,6 +2,9 @@ import json
 import sqlite3
 from pathlib import Path
 from mcp.server.mcpserver.exceptions import ToolError
+import sys
+sys.path.insert(0, str(Path(__file__).parent / "rag"))
+import search_hybrid
 
 from mcp.server.mcpserver import MCPServer
 

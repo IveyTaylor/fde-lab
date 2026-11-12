@@ -5,10 +5,9 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent
 VECTOR_DEPTH = 5
 
-question = "What does AC 43-203B cover?"
-records = search_vector.load_index(BASE_DIR / "embeddings.json")
-
-def search(question, records, k=5):
+def search(question, records, k=5, source_file=None):
+    if source_file is not None:
+        records = [r for r in records if r["source_file"] == source_file]
     all_v = search_vector.search(question, records, k=len(records))
     results_v = all_v[:VECTOR_DEPTH]
     results_k = search_keyword.search(question, records)
@@ -42,6 +41,9 @@ def search(question, records, k=5):
 if __name__ == "__main__":
     import json
     import search_keyword
+
+    question = "What does AC 43-203B cover?"
+    records = search_vector.load_index(BASE_DIR / "embeddings.json")
 
     QUESTION_ID = "q07"
 

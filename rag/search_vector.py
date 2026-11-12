@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from embeddings import EMBED_MODEL, embed_query, cosine, EMBED_DIM
-
+import sys
 BASE_DIR = Path(__file__).parent
 
 def load_index(path):
@@ -30,7 +30,7 @@ def load_index(path):
     if bad:
         raise ValueError(f"{path.name}: {len(bad)} records have the wrong vector size, e.g #{bad[0]}")
 
-    print(f"Loaded {len(records)} records from {path.name} ({data['model']}, {EMBED_DIM} dims)")
+    print(f"Loaded {len(records)} records from {path.name} ({data['model']}, {EMBED_DIM} dims)", file=sys.stderr)
     return records
 
 def search(question, records, k=5, source_file=None):

@@ -33,3 +33,18 @@ Channel	Direction	In a terminal it’s connected to	In Python
 stdin	in	        your keyboard	input(), sys.stdin
 stdout	out	        your screen	print()
 stderr	out	        your screen too	print(..., file=sys.stderr)
+
+## My guess as to what the Python SDK will do for me inside the loop
+I hope that it's going to wire up the transition from JSON to Python. That is going to let me just call the SQL server, specify the server, the tables, and the query, and it's going to take care of translating that into the call that the MCP server really needs. 
+
+## 11/11 We built the SDK handshake. This is the "initialized" from the client, the response that it's initialized from the server, and then an unanswered "yes." I got your initialization response going back from the client to the server. 
+We learned that there are two different kinds of errors. We needed to encapsulate a SQL Server error because the SQL Server error that the table doesn't exist actually proves that everything except SQL Server worked. We needed to raise that error and grab the text that SQL Server is sending back so the model would realize that everything about the SDK for MCP worked, but it needs to find a better SQL query. This was done using a ToolError. 
+The SDK is asynchronous, meaning you have to call a flush command to get the things that you're sending over to go through. Flush just tells it to do everything that you've been waiting for, however long it takes. I think that's legacy functionality where it would wait for lots and lots of requests to pile up and then do them all at once. In this case, I don't want it to act like that, so I have to call some sort of a flush command.
+
+Also, when I sent four different statements to it (the initialize statements and then the second client, which is responding, saying, "Yes, I understand that you responded to me," and then two requests), I had to wait 10 seconds to get that to work. When we waited 3 seconds, it didn't work. When we waited 10 seconds, it did. 
+
+
+## 11/12 we modified a few functions so that MCP SDK could import them. This is because there were two statements in search_hybrid.py that were not inside any function. We needed to put them into the main function to protect them from being run at the time that the module is imported. Critically, one of them was a print statement, and that print statement would have messed up the MCP server's stdout and corrupted the protocol that it has in place for very structured communications. 
+At the end of all that, we reran eval.py to make sure that we hadn't broken anything and, frankly, to check if anything had been improved. It was exactly the same as it was before. 
+
+
