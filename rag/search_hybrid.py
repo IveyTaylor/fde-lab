@@ -7,7 +7,11 @@ VECTOR_DEPTH = 5
 
 def search(question, records, k=5, source_file=None):
     if source_file is not None:
-        records = [r for r in records if r["source_file"] == source_file]
+        records = [r for r in records if r["source_file"]==source_file]
+        if len(records)==0:
+            raise ValueError(
+                f"No document named '{source_file}'. Retry without source_file to search all documents."
+            )
     all_v = search_vector.search(question, records, k=len(records))
     results_v = all_v[:VECTOR_DEPTH]
     results_k = search_keyword.search(question, records)
