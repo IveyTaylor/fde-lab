@@ -3,4 +3,6 @@
    {"jsonrpc":"2.0","id":2,"method":"tools/list"}
    {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run_sql","arguments":{"query":"SELECT * FROM customer LIMIT 3"}}}
    {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"run_sql","arguments":{"query":"SELECT * FROM nope"}}}
-   
+   {"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_faa_documents","arguments":{"question":"What does AC 43-203B cover?"}}}
+   {"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"search_faa_documents","arguments":{"question":"What does AC 43-203B cover?","source_file":"nope.pdf"}}}
+   {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"search_faa_documents","arguments":{"question":"What does AC 43-203B cover?","source_file":"dot_71398_DS1.pdf"}}}
