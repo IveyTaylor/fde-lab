@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent / "rag"))
 import search_hybrid
 import search_vector
 import requests
+from datetime import datetime
 
 from mcp.server.mcpserver import MCPServer
 
@@ -35,6 +36,9 @@ def search_faa_documents(question: str, source_file: str | None = None) -> str:
     Returns the top 5 matching passages as JSON, each with source_file and page range; 
     cite them when answering. Optional source_file limits the search to one document.
     """
+    print(f"[tool_call] {datetime.now().isoformat(timespec='seconds')} search_faa_documents "
+      f"question={question!r} source_file={source_file!r}",
+      file=sys.stderr, flush=True)    
     try:
         results = search_hybrid.search(question, RECORDS, source_file=source_file)
     except ValueError as e:

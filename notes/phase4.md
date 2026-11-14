@@ -47,4 +47,23 @@ Also, when I sent four different statements to it (the initialize statements and
 ## 11/12 we modified a few functions so that MCP SDK could import them. This is because there were two statements in search_hybrid.py that were not inside any function. We needed to put them into the main function to protect them from being run at the time that the module is imported. Critically, one of them was a print statement, and that print statement would have messed up the MCP server's stdout and corrupted the protocol that it has in place for very structured communications. 
 At the end of all that, we reran eval.py to make sure that we hadn't broken anything and, frankly, to check if anything had been improved. It was exactly the same as it was before. 
 
+## 11/13
+Now that the MCP server is set up in Claude Desktop, I can query the FIA corpus in Claude Desktop. We have shown that the model made at least one call. We were looking at the debugging information that the Claude Desktop app logs, which isn't really very human-readable. 
+
+Made a decision that logging is not going to be part of the POC, but that we will have to put a log line in every call to the MCP server and a log line in every call to the agent. The MCP server log line is going to track who asked for what, and the agent is going to track what's in the messages list. 
+
+The Claude model did something without me asking it to. That was kind of cool, and I didn't even know that it would do it. It changed my question, "What does AC 400343-203B cover?" into "Purpose of AC 43-203B," which made what it sent semantically a lot closer to what the answers were. It got the right answer as a result. 
+
+Also, the model filtered on the correct PDF document. It's in a file source of 71398.pdf. 
+
+In order to turn on the MCP server, we had to modify a file called claude_desktop_config.json, adding json to let it Note that there's an MCP server here, and the MCP server is called FDE Lab. Somehow I copied the word Git into that file as well. The weird thing is that I restarted Claude Desktop, and it went fine. Today I restarted Claude Desktop, and it said I didn't have any MCP servers.
+
+Anyway, luckily I had saved a copy of it. The thing that I screwed up was very small. I was able to just modify it, but the lesson here is to be very, very careful with configuration files, obviously. 
+
+Desktop made 2 calls: broad (keywords, no filter) → narrow (answer-shaped query + source_file learned from call 1). Works only because the tool returns source_file. The model never sends the user’s wording. Server-side stderr print was the only way to see this; the client log hides arguments.
+
+Web chat reaches fde-lab only through the Desktop app on my laptop. Quit Desktop → tool gone. A local server is single-user and tied to one machine being on; shared access needs a remote server.
+
+What test_sdk.jsonl is doing is acting like the client, sending several statements to the server In the proper format. It's a good test because it doesn't need the model. It doesn't need any of the other Python code other than MCP server SDK, and it just checks to make sure that that's working. 
+That test is a great one for production runs when we've made code changes, right? If there's a code change to the MCP server, we want to identify whether the MCP server is working properly or not before we even get into whether the model is working. 
 
