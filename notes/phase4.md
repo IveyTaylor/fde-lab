@@ -66,4 +66,6 @@ Web chat reaches fde-lab only through the Desktop app on my laptop. Quit Desktop
 
 What test_sdk.jsonl is doing is acting like the client, sending several statements to the server In the proper format. It's a good test because it doesn't need the model. It doesn't need any of the other Python code other than MCP server SDK, and it just checks to make sure that that's working. 
 That test is a great one for production runs when we've made code changes, right? If there's a code change to the MCP server, we want to identify whether the MCP server is working properly or not before we even get into whether the model is working. 
+Here's how you run the piped test:
+(cat test_sdk.jsonl; sleep 20) | python mcp_server_sdk.py
 
